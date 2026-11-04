@@ -1,0 +1,1 @@
+export const saludo = (nombre: string): string => `Hola, ${nombre}`;
