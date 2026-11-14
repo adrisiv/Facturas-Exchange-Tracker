@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "test:mock": "node --experimental-strip-types --test src/mocks/handlers.test.ts",
     "lint": "eslint .",
     "preview": "vite preview",
     "prepare": "husky",
@@ -36,9 +37,15 @@
     "globals": "^16.3.0",
     "husky": "^9.1.7",
     "lint-staged": "^17.6.0",
+    "msw": "^2.11.5",
     "prettier": "^3.9.10",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.39.1",
     "vite": "^7.1.2"
+  },
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
   }
 }
