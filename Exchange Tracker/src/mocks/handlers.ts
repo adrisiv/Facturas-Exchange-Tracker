@@ -1,30 +1,17 @@
 import { http, HttpResponse } from 'msw'
-import type { Invoice } from '@/types/invoice'
-import { invoices as initialInvoices } from './data.ts'
-
-interface MockUser {
-  id: string
-  name: string
-  email: string
-}
-
-interface InvoiceInput {
-  product: string
-  quantity: number
-  unitPrice: number
-  currency: string
-  date: string
-  status: Invoice['status']
-}
+import type { Invoice, InvoiceInput, User } from '@/types'
+import { invoices as initialInvoices, todayRate, users, withTotals } from './data.ts'
 
 let invoices = [...initialInvoices]
-let currentUser: MockUser | null = null
+let currentUser: User | null = null
 
-const makeUser = (email: string): MockUser => ({
-  id: 'user-001',
-  name: email.split('@')[0] || 'Usuario de prueba',
-  email,
-})
+const makeUser = (email: string, name?: string): User =>
+  users.find((user) => user.email === email) ?? {
+    id: `user-${crypto.randomUUID()}`,
+    name: name || email.split('@')[0] || 'Usuario de prueba',
+    email,
+    role: 'ambos',
+  }
 
 export const handlers = [
   http.post('*/api/auth/login', async ({ request }) => {
@@ -34,8 +21,8 @@ export const handlers = [
   }),
 
   http.post('*/api/auth/register', async ({ request }) => {
-    const body = (await request.json()) as { email?: string }
-    currentUser = makeUser(body.email ?? 'demo@example.com')
+    const body = (await request.json()) as Partial<User>
+    currentUser = makeUser(body.email ?? 'demo@example.com', body.name)
     return HttpResponse.json({ user: currentUser, token: 'mock-token' }, { status: 201 })
   }),
 
@@ -45,15 +32,20 @@ export const handlers = [
       : HttpResponse.json({ message: 'No hay una sesión activa' }, { status: 401 }),
   ),
 
-  http.get('*/api/rates/today', () =>
-    HttpResponse.json({ date: '2026-11-14', base: 'USD', rates: { EUR: 0.86, VES: 478.5 } }),
-  ),
+  http.get('*/api/rates/today', () => HttpResponse.json(todayRate)),
 
   http.get('*/api/invoices', () => HttpResponse.json(invoices)),
 
   http.post('*/api/invoices', async ({ request }) => {
     const body = (await request.json()) as InvoiceInput
-    const invoice: Invoice = { ...body, id: `inv-${crypto.randomUUID()}` }
+    const now = new Date().toISOString()
+    const invoice: Invoice = {
+      ...body,
+      ...withTotals(body),
+      id: `inv-${crypto.randomUUID()}`,
+      createdAt: now,
+      updatedAt: now,
+    }
     invoices = [...invoices, invoice]
     return HttpResponse.json(invoice, { status: 201 })
   }),
@@ -63,7 +55,8 @@ export const handlers = [
     const index = invoices.findIndex((invoice) => invoice.id === params.id)
     if (index === -1) return HttpResponse.json({ message: 'Factura no encontrada' }, { status: 404 })
 
-    const invoice = { ...invoices[index]!, ...body }
+    const merged = { ...invoices[index]!, ...body }
+    const invoice: Invoice = { ...merged, ...withTotals(merged), updatedAt: new Date().toISOString() }
     invoices = invoices.map((item, itemIndex) => (itemIndex === index ? invoice : item))
     return HttpResponse.json(invoice)
   }),
